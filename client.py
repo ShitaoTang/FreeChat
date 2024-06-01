@@ -1,8 +1,13 @@
 import curses
 import threading
 import time
+import asyncio
+import websockets
+import json
 
-def update_content(window, content_list, stop_event):
+stop_event = threading.Event()
+
+def update_content(window, content_list):
     while not stop_event.is_set():
         window.erase()
         for i, line in enumerate(content_list):
@@ -12,7 +17,18 @@ def update_content(window, content_list, stop_event):
         window.refresh()
         time.sleep(0.1)  # Update every 0.1 seconds
 
-def input_box(stdscr):
+async def websocket_handler(uri, content_list):
+    async with websockets.connect(uri) as websocket:
+        while not stop_event.is_set():
+            try:
+                message = await websocket.recv()
+                data = json.loads(message)
+                if data['type'] == 'message':
+                    content_list.append(data['message'] + '\n')
+            except websockets.ConnectionClosed:
+                break
+
+def input_box(stdscr, content_list):
     curses.echo()
     
     # Setup the window for content display
@@ -26,15 +42,9 @@ def input_box(stdscr):
     input_box_window.addstr(1, 1, "Input: ")
     input_box_window.refresh()
     
-    # List to store user inputs
-    content_list = []
-
-    # Event to stop the thread
-    stop_event = threading.Event()
-    
     # Start thread for updating content display
-    threading.Thread(target=update_content, args=(content_window, content_list, stop_event), daemon=True).start()
-    
+    threading.Thread(target=update_content, args=(content_window, content_list), daemon=True).start()
+
     while True:
         # Get input from the user
         input_str = input_box_window.getstr(1, 8, 100)
@@ -44,8 +54,8 @@ def input_box(stdscr):
         if input_decoded.lower() == ':q':
             break
 
-        # Append user input to the content list
-        content_list.append(input_decoded + '\n')
+        # Send the user input to the WebSocket server
+        asyncio.run(send_message(input_decoded))
 
         # Clear the input box after getting input
         input_box_window.clear()
@@ -56,8 +66,19 @@ def input_box(stdscr):
     # Stop the content update thread
     stop_event.set()
 
+async def send_message(message):
+    async with websockets.connect("ws://tstwiki.cn:8765") as websocket:
+        data = json.dumps({"type": "message", "message": message})
+        await websocket.send(data)
+
 def main():
-    curses.wrapper(input_box)
+    content_list = []
+    uri = "ws://tstwiki.cn:8765"
+    
+    # Start websocket handler in a separate thread
+    threading.Thread(target=lambda: asyncio.run(websocket_handler(uri, content_list)), daemon=True).start()
+
+    curses.wrapper(input_box, content_list)
 
 if __name__ == "__main__":
     main()
