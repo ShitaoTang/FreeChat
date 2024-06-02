@@ -40,15 +40,20 @@ def input_box(stdscr, content_list, username):
     # Setup the window for input box
     input_box_window = curses.newwin(3, curses.COLS, curses.LINES - 3, 0)
     input_box_window.box()
-    input_box_window.addstr(1, 1, f"{username}: ")
+    
+    prompt = f"{username}: "
+    input_box_window.addstr(1, 1, prompt)
     input_box_window.refresh()
+    
+    # Calculate the starting position for user input
+    start_x = len(prompt) + 1
     
     # Start thread for updating content display
     threading.Thread(target=update_content, args=(content_window, content_list), daemon=True).start()
 
     while True:
         # Get input from the user
-        input_str = input_box_window.getstr(1, 8, 100)
+        input_str = input_box_window.getstr(1, start_x, 100)
         input_decoded = input_str.decode('utf-8')
 
         # Exit the loop if the user types ':q'
@@ -61,7 +66,7 @@ def input_box(stdscr, content_list, username):
         # Clear the input box after getting input
         input_box_window.clear()
         input_box_window.box()
-        input_box_window.addstr(1, 1, f"{username}: ")
+        input_box_window.addstr(1, 1, prompt)
         input_box_window.refresh()
 
     # Stop the content update thread
