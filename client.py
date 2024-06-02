@@ -13,19 +13,21 @@ content_lock = threading.Lock()
 
 def update_content(window, content_list):
     window.erase()
+    window.box()  # 在聊天窗口周围绘制矩形框
+    max_y, max_x = window.getmaxyx()
     with content_lock:
         for i, line in enumerate(content_list):
-            if i >= window.getmaxyx()[0] - 1:  # 保证不会超出窗口大小
+            if i >= max_y - 2:  # 保证不会超出窗口大小
                 break
             # 使用颜色对显示时间戳和用户名
             if '] ' in line:
                 timestamp, rest = line.split('] ', 1)
                 username, message = rest.split(': ', 1)
-                window.addstr(i, 0, timestamp + "] ", curses.color_pair(2))
-                window.addstr(i, len(timestamp) + 2, username + ': ', curses.color_pair(1))
-                window.addstr(i, len(timestamp) + len(username) + 4, message)
+                window.addstr(i + 1, 1, timestamp + "] ", curses.color_pair(2))
+                window.addstr(i + 1, len(timestamp) + 3, username + ': ', curses.color_pair(1))
+                window.addstr(i + 1, len(timestamp) + len(username) + 5, message[:max_x - len(timestamp) - len(username) - 7])
             else:
-                window.addstr(i, 0, line)
+                window.addstr(i + 1, 1, line[:max_x - 2])
     window.refresh()
 
 async def websocket_handler(uri, content_list, window):
@@ -61,6 +63,7 @@ def input_box(stdscr, content_list, username):
     content_height = height - 3
     content_window = curses.newwin(content_height, chat_width, 0, 0)
     content_window.scrollok(True)
+    content_window.box()  # 绘制聊天内容窗口的矩形框
     
     # Setup the window for input box
     input_box_window = curses.newwin(3, chat_width, height - 3, 0)
