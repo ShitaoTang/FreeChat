@@ -11,11 +11,18 @@ import psutil  # 用于获取系统信息
 stop_event = threading.Event()
 content_lock = threading.Lock()
 
+def draw_borders(window, color_pair):
+    max_y, max_x = window.getmaxyx()
+    window.attron(color_pair)
+    window.border()
+    window.attroff(color_pair)
+
 def update_content(window, content_list):
     window.erase()
-    window.box()  # 在聊天窗口周围绘制矩形框
     max_y, max_x = window.getmaxyx()
     with content_lock:
+        if not content_list:
+            draw_borders(window, curses.color_pair(5))
         for i, line in enumerate(content_list):
             if i >= max_y - 2:  # 保证不会超出窗口大小
                 break
@@ -28,6 +35,7 @@ def update_content(window, content_list):
                 window.addstr(i + 1, len(timestamp) + len(username) + 5, message[:max_x - len(timestamp) - len(username) - 7])
             else:
                 window.addstr(i + 1, 1, line[:max_x - 2])
+    draw_borders(window, curses.color_pair(5))
     window.refresh()
 
 async def websocket_handler(uri, content_list, window):
@@ -53,6 +61,8 @@ def input_box(stdscr, content_list, username):
     curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)  # 用户名颜色
     curses.init_pair(2, curses.COLOR_CYAN, curses.COLOR_BLACK)   # 时间戳颜色
     curses.init_pair(3, curses.COLOR_WHITE, curses.COLOR_BLACK)  # 默认消息颜色
+    curses.init_pair(4, curses.COLOR_RED, curses.COLOR_BLACK)    # 表头颜色
+    curses.init_pair(5, curses.COLOR_CYAN, curses.COLOR_BLACK)   # 边框颜色
 
     # Setup the window dimensions
     height, width = stdscr.getmaxyx()
@@ -63,15 +73,15 @@ def input_box(stdscr, content_list, username):
     content_height = height - 3
     content_window = curses.newwin(content_height, chat_width, 0, 0)
     content_window.scrollok(True)
-    content_window.box()  # 绘制聊天内容窗口的矩形框
+    draw_borders(content_window, curses.color_pair(5))  # 绘制聊天内容窗口的矩形框
     
     # Setup the window for input box
     input_box_window = curses.newwin(3, chat_width, height - 3, 0)
-    input_box_window.box()
+    draw_borders(input_box_window, curses.color_pair(5))
     
     # Setup the window for system info
     sysinfo_window = curses.newwin(height, sysinfo_width, 0, chat_width)
-    sysinfo_window.box()
+    draw_borders(sysinfo_window, curses.color_pair(5))
     
     prompt = f"{username}: "
     input_box_window.addstr(1, 1, prompt, curses.color_pair(1))  # 设置用户名颜色
@@ -105,7 +115,7 @@ def input_box(stdscr, content_list, username):
 
         # Clear the input box after getting input
         input_box_window.clear()
-        input_box_window.box()
+        draw_borders(input_box_window, curses.color_pair(5))
         input_box_window.addstr(1, 1, prompt, curses.color_pair(1))  # 保持用户名颜色
         input_box_window.move(1, start_x)  # 确保光标在正确的位置
         input_box_window.refresh()
@@ -125,11 +135,39 @@ async def send_message(message, username):
 def update_sysinfo(window):
     while not stop_event.is_set():
         window.erase()
-        window.box()
+        draw_borders(window, curses.color_pair(5))
         window.addstr(1, 1, "System Information", curses.A_BOLD)
-        window.addstr(3, 1, f"CPU Usage: {psutil.cpu_percent()}%")
-        window.addstr(4, 1, f"Memory Usage: {psutil.virtual_memory().percent}%")
-        window.addstr(5, 1, f"Disk Usage: {psutil.disk_usage('/').percent}%")
+        window.addstr(3, 1, f"CPU Usage: {psutil.cpu_percent():.1f}%")
+        window.addstr(4, 1, f"Memory Usage: {psutil.virtual_memory().percent:.1f}%")
+        window.addstr(5, 1, f"Disk Usage: {psutil.disk_usage('/').percent:.1f}%")
+        
+        # 添加表头
+        header = f"{'PID':<6} {'COMMAND':<15} {'CPU%':>6}  {'TIME':<8} {'MEM%':>5} {'STATE'}"
+        window.addstr(7, 1, header, curses.color_pair(4))
+
+        # 获取进程信息
+        processes = []
+        for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent', 'status', 'create_time']):
+            processes.append(proc.info)
+
+        # 根据CPU使用率排序
+        processes = sorted(processes, key=lambda p: p['cpu_percent'], reverse=True)
+
+        # 显示前10个进程
+        max_y, max_x = window.getmaxyx()
+        max_processes = min(len(processes), max_y - 8 - 1)  # 保证不会超出窗口大小
+        for i in range(max_processes):
+            proc = processes[i]
+            pid = proc['pid']
+            name = proc['name'][:15]
+            cpu = f"{proc['cpu_percent']:.1f}"
+            mem = f"{proc['memory_percent']:.1f}"
+            status = proc['status']
+            runtime = datetime.now() - datetime.fromtimestamp(proc['create_time'])
+            runtime_str = str(runtime).split('.')[0]  # 去掉微秒部分
+            line = f"{pid:<6} {name:<15} {cpu:>6}  {runtime_str:<8} {mem:>5} {status}"
+            window.addstr(8 + i, 1, line[:max_x - 2])
+
         window.refresh()
         time.sleep(1)
 
