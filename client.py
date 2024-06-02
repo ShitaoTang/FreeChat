@@ -40,7 +40,7 @@ def input_box(stdscr, content_list, username):
     # Setup the window for input box
     input_box_window = curses.newwin(3, curses.COLS, curses.LINES - 3, 0)
     input_box_window.box()
-    input_box_window.addstr(1, 1, "Input: ")
+    input_box_window.addstr(1, 1, f"{username}: ")
     input_box_window.refresh()
     
     # Start thread for updating content display
@@ -61,7 +61,7 @@ def input_box(stdscr, content_list, username):
         # Clear the input box after getting input
         input_box_window.clear()
         input_box_window.box()
-        input_box_window.addstr(1, 1, "Input: ")
+        input_box_window.addstr(1, 1, f"{username}: ")
         input_box_window.refresh()
 
     # Stop the content update thread
