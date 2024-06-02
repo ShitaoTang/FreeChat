@@ -8,10 +8,11 @@ import sys
 from datetime import datetime
 
 stop_event = threading.Event()
+content_lock = threading.Lock()
 
 def update_content(window, content_list):
-    while not stop_event.is_set():
-        window.erase()
+    window.erase()
+    with content_lock:
         for i, line in enumerate(content_list):
             if i >= curses.LINES - 3:  # 保证不会超出窗口大小
                 break
@@ -24,10 +25,9 @@ def update_content(window, content_list):
                 window.addstr(i, len(timestamp) + len(username) + 4, message)
             else:
                 window.addstr(i, 0, line)
-        window.refresh()
-        time.sleep(0.1)  # Update every 0.1 seconds
+    window.refresh()
 
-async def websocket_handler(uri, content_list):
+async def websocket_handler(uri, content_list, window):
     async with websockets.connect(uri) as websocket:
         while not stop_event.is_set():
             try:
@@ -35,7 +35,10 @@ async def websocket_handler(uri, content_list):
                 data = json.loads(message)
                 if data['type'] == 'message':
                     timestamp = data.get('timestamp', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-                    content_list.append(f"[{timestamp}] {data['username']}: {data['message']}\n")
+                    with content_lock:
+                        content_list.append(f"[{timestamp}] {data['username']}: {data['message']}\n")
+                    # Update the content display whenever a new message is received
+                    update_content(window, content_list)
             except websockets.ConnectionClosed:
                 break
 
@@ -46,7 +49,7 @@ def input_box(stdscr, content_list, username):
     curses.start_color()
     curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)  # 用户名颜色
     curses.init_pair(2, curses.COLOR_CYAN, curses.COLOR_BLACK)   # 时间戳颜色
-    curses.init_pair(3, curses.COLOR_WHITE, curses.COLOR_BLACK) # 默认消息颜色
+    curses.init_pair(3, curses.COLOR_WHITE, curses.COLOR_BLACK)  # 默认消息颜色
 
     # Setup the window for content display
     content_height = curses.LINES - 3
@@ -65,7 +68,7 @@ def input_box(stdscr, content_list, username):
     start_x = len(prompt) + 1
     
     # Start thread for updating content display
-    threading.Thread(target=update_content, args=(content_window, content_list), daemon=True).start()
+    threading.Thread(target=lambda: asyncio.run(websocket_handler("ws://tstwiki.cn:8765", content_list, content_window)), daemon=True).start()
 
     while True:
         # 确保光标在正确的位置并闪烁
@@ -91,6 +94,9 @@ def input_box(stdscr, content_list, username):
         input_box_window.move(1, start_x)  # 确保光标在正确的位置
         input_box_window.refresh()
 
+        # Update the content display whenever a new message is sent
+        update_content(content_window, content_list)
+
     # Stop the content update thread
     stop_event.set()
 
@@ -102,7 +108,6 @@ async def send_message(message, username):
 
 def main(stdscr):
     content_list = []
-    uri = "ws://tstwiki.cn:8765"
 
     # Default username
     username = "Anonymous"
@@ -110,9 +115,6 @@ def main(stdscr):
     # Check if a username is passed as an argument
     if len(sys.argv) > 1:
         username = sys.argv[1]
-
-    # Start websocket handler in a separate thread
-    threading.Thread(target=lambda: asyncio.run(websocket_handler(uri, content_list)), daemon=True).start()
 
     input_box(stdscr, content_list, username)
 
