@@ -14,7 +14,13 @@ def update_content(window, content_list):
         for i, line in enumerate(content_list):
             if i >= curses.LINES - 3:  # 保证不会超出窗口大小
                 break
-            window.addstr(i, 0, line)
+            # 使用颜色对显示用户名
+            if ': ' in line:
+                username, message = line.split(': ', 1)
+                window.addstr(i, 0, username + ': ', curses.color_pair(1))
+                window.addstr(i, len(username) + 2, message)
+            else:
+                window.addstr(i, 0, line)
         window.refresh()
         time.sleep(0.1)  # Update every 0.1 seconds
 
@@ -32,6 +38,10 @@ async def websocket_handler(uri, content_list):
 def input_box(stdscr, content_list, username):
     curses.echo()
     
+    # 初始化颜色
+    curses.start_color()
+    curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)  # 1是用户名颜色对
+
     # Setup the window for content display
     content_height = curses.LINES - 3
     content_window = curses.newwin(content_height, curses.COLS, 0, 0)
@@ -42,7 +52,7 @@ def input_box(stdscr, content_list, username):
     input_box_window.box()
     
     prompt = f"{username}: "
-    input_box_window.addstr(1, 1, prompt)
+    input_box_window.addstr(1, 1, prompt, curses.color_pair(1))  # 设置用户名颜色
     input_box_window.refresh()
     
     # Calculate the starting position for user input
@@ -52,9 +62,14 @@ def input_box(stdscr, content_list, username):
     threading.Thread(target=update_content, args=(content_window, content_list), daemon=True).start()
 
     while True:
-        # Get input from the user
-        input_str = input_box_window.getstr(1, start_x, 100)
-        input_decoded = input_str.decode('utf-8')
+        # 确保光标在正确的位置并闪烁
+        input_box_window.move(1, start_x)
+        input_box_window.refresh()
+        try:
+            input_str = input_box_window.getstr(1, start_x, 100)
+            input_decoded = input_str.decode('utf-8')
+        except UnicodeDecodeError:
+            continue  # 如果解码失败，跳过当前输入
 
         # Exit the loop if the user types ':q'
         if input_decoded.lower() == ':q':
@@ -66,7 +81,8 @@ def input_box(stdscr, content_list, username):
         # Clear the input box after getting input
         input_box_window.clear()
         input_box_window.box()
-        input_box_window.addstr(1, 1, prompt)
+        input_box_window.addstr(1, 1, prompt, curses.color_pair(1))  # 保持用户名颜色
+        input_box_window.move(1, start_x)  # 确保光标在正确的位置
         input_box_window.refresh()
 
     # Stop the content update thread
@@ -77,7 +93,7 @@ async def send_message(message, username):
         data = json.dumps({"type": "message", "username": username, "message": message})
         await websocket.send(data)
 
-def main():
+def main(stdscr):
     content_list = []
     uri = "ws://tstwiki.cn:8765"
 
@@ -91,7 +107,7 @@ def main():
     # Start websocket handler in a separate thread
     threading.Thread(target=lambda: asyncio.run(websocket_handler(uri, content_list)), daemon=True).start()
 
-    curses.wrapper(input_box, content_list, username)
+    input_box(stdscr, content_list, username)
 
 if __name__ == "__main__":
-    main()
+    curses.wrapper(main)
