@@ -4,6 +4,7 @@ import time
 import asyncio
 import websockets
 import json
+import sys
 
 stop_event = threading.Event()
 
@@ -24,11 +25,11 @@ async def websocket_handler(uri, content_list):
                 message = await websocket.recv()
                 data = json.loads(message)
                 if data['type'] == 'message':
-                    content_list.append(data['message'] + '\n')
+                    content_list.append(data['username'] + ': ' + data['message'] + '\n')
             except websockets.ConnectionClosed:
                 break
 
-def input_box(stdscr, content_list):
+def input_box(stdscr, content_list, username):
     curses.echo()
     
     # Setup the window for content display
@@ -55,7 +56,7 @@ def input_box(stdscr, content_list):
             break
 
         # Send the user input to the WebSocket server
-        asyncio.run(send_message(input_decoded))
+        asyncio.run(send_message(input_decoded, username))
 
         # Clear the input box after getting input
         input_box_window.clear()
@@ -66,19 +67,26 @@ def input_box(stdscr, content_list):
     # Stop the content update thread
     stop_event.set()
 
-async def send_message(message):
+async def send_message(message, username):
     async with websockets.connect("ws://tstwiki.cn:8765") as websocket:
-        data = json.dumps({"type": "message", "message": message})
+        data = json.dumps({"type": "message", "username": username, "message": message})
         await websocket.send(data)
 
 def main():
     content_list = []
     uri = "ws://tstwiki.cn:8765"
+
+    # Default username
+    username = "Anonymous"
     
+    # Check if a username is passed as an argument
+    if len(sys.argv) > 1:
+        username = sys.argv[1]
+
     # Start websocket handler in a separate thread
     threading.Thread(target=lambda: asyncio.run(websocket_handler(uri, content_list)), daemon=True).start()
 
-    curses.wrapper(input_box, content_list)
+    curses.wrapper(input_box, content_list, username)
 
 if __name__ == "__main__":
     main()
