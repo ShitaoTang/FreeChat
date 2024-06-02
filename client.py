@@ -5,6 +5,7 @@ import asyncio
 import websockets
 import json
 import sys
+from datetime import datetime
 
 stop_event = threading.Event()
 
@@ -14,11 +15,13 @@ def update_content(window, content_list):
         for i, line in enumerate(content_list):
             if i >= curses.LINES - 3:  # 保证不会超出窗口大小
                 break
-            # 使用颜色对显示用户名
-            if ': ' in line:
-                username, message = line.split(': ', 1)
-                window.addstr(i, 0, username + ': ', curses.color_pair(1))
-                window.addstr(i, len(username) + 2, message)
+            # 使用颜色对显示时间戳和用户名
+            if '] ' in line:
+                timestamp, rest = line.split('] ', 1)
+                username, message = rest.split(': ', 1)
+                window.addstr(i, 0, timestamp + "] ", curses.color_pair(2))
+                window.addstr(i, len(timestamp) + 2, username + ': ', curses.color_pair(1))
+                window.addstr(i, len(timestamp) + len(username) + 4, message)
             else:
                 window.addstr(i, 0, line)
         window.refresh()
@@ -31,7 +34,8 @@ async def websocket_handler(uri, content_list):
                 message = await websocket.recv()
                 data = json.loads(message)
                 if data['type'] == 'message':
-                    content_list.append(data['username'] + ': ' + data['message'] + '\n')
+                    timestamp = data.get('timestamp', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                    content_list.append(f"[{timestamp}] {data['username']}: {data['message']}\n")
             except websockets.ConnectionClosed:
                 break
 
@@ -40,7 +44,9 @@ def input_box(stdscr, content_list, username):
     
     # 初始化颜色
     curses.start_color()
-    curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)  # 1是用户名颜色对
+    curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)  # 用户名颜色
+    curses.init_pair(2, curses.COLOR_CYAN, curses.COLOR_BLACK)   # 时间戳颜色
+    curses.init_pair(3, curses.COLOR_WHITE, curses.COLOR_BLACK) # 默认消息颜色
 
     # Setup the window for content display
     content_height = curses.LINES - 3
@@ -90,7 +96,8 @@ def input_box(stdscr, content_list, username):
 
 async def send_message(message, username):
     async with websockets.connect("ws://tstwiki.cn:8765") as websocket:
-        data = json.dumps({"type": "message", "username": username, "message": message})
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        data = json.dumps({"type": "message", "username": username, "message": message, "timestamp": timestamp})
         await websocket.send(data)
 
 def main(stdscr):
