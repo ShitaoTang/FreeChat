@@ -91,7 +91,7 @@ def input_box(stdscr, content_list, username):
     start_x = len(prompt) + 1
     
     # Start thread for updating content display
-    threading.Thread(target=lambda: asyncio.run(websocket_handler("ws://tstwiki.cn:8765", content_list, content_window)), daemon=True).start()
+    threading.Thread(target=lambda: asyncio.run(websocket_handler("ws://localhost:8765", content_list, content_window)), daemon=True).start()
     
     # Start thread for updating system info display
     threading.Thread(target=update_sysinfo, args=(sysinfo_window,), daemon=True).start()
@@ -127,7 +127,7 @@ def input_box(stdscr, content_list, username):
     stop_event.set()
 
 async def send_message(message, username):
-    async with websockets.connect("ws://tstwiki.cn:8765") as websocket:
+    async with websockets.connect("ws://localhost:8765") as websocket:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         data = json.dumps({"type": "message", "username": username, "message": message, "timestamp": timestamp})
         await websocket.send(data)
