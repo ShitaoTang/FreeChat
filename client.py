@@ -164,7 +164,13 @@ def update_sysinfo(window):
             mem = f"{proc['memory_percent']:.1f}"
             status = proc['status']
             runtime = datetime.now() - datetime.fromtimestamp(proc['create_time'])
-            runtime_str = str(runtime).split('.')[0]  # 去掉微秒部分
+
+            days = runtime.days
+            hours, remainder = divmod(runtime.seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            hours += 24 * days
+            runtime_str = f"{hours:02}:{minutes:02}:{seconds:02}"
+
             line = f"{pid:<6} {name:<15} {cpu:>6}  {runtime_str:<8} {mem:>5} {status}"
             window.addstr(8 + i, 1, line[:max_x - 2])
 
