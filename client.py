@@ -148,7 +148,9 @@ def update_sysinfo(window):
         # 获取进程信息
         processes = []
         for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent', 'status', 'create_time']):
-            processes.append(proc.info)
+            info = proc.info
+            if info['cpu_percent'] is not None:  # 确保cpu_percent不是None
+                processes.append(info)
 
         # 根据CPU使用率排序
         processes = sorted(processes, key=lambda p: p['cpu_percent'], reverse=True)
@@ -164,12 +166,22 @@ def update_sysinfo(window):
             mem = f"{proc['memory_percent']:.1f}"
             status = proc['status']
             runtime = datetime.now() - datetime.fromtimestamp(proc['create_time'])
-            runtime_str = str(runtime).split('.')[0]  # 去掉微秒部分
+            
+            # 格式化运行时间
+            days = runtime.days
+            hours, remainder = divmod(runtime.seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            if days > 0:
+                runtime_str = f"{days}d {hours}h"
+            else:
+                runtime_str = f"{hours:02}:{minutes:02}:{seconds:02}"
+
             line = f"{pid:<6} {name:<15} {cpu:>6}  {runtime_str:<8} {mem:>5} {status}"
             window.addstr(8 + i, 1, line[:max_x - 2])
 
         window.refresh()
         time.sleep(1)
+
 
 def main(stdscr):
     content_list = []
