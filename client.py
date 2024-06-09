@@ -12,12 +12,27 @@ stop_event = threading.Event()
 content_lock = threading.Lock()
 
 def draw_borders(window, color_pair):
+    '''
+    绘制窗口边框
+    
+    Args:
+        window: 窗口对象
+        color_pair: 颜色对
+    '''
     max_y, max_x = window.getmaxyx()
     window.attron(color_pair)
     window.border()
     window.attroff(color_pair)
 
+
 def update_content(window, content_list):
+    '''
+    更新窗口内容
+    
+    Args:
+        window: 窗口对象
+        content_list: 内容列表
+    '''
     window.erase()
     max_y, max_x = window.getmaxyx()
     with content_lock:
@@ -38,7 +53,16 @@ def update_content(window, content_list):
     draw_borders(window, curses.color_pair(5))
     window.refresh()
 
+
 async def websocket_handler(uri, content_list, window):
+    '''
+    WebSocket处理程序，接收消息并更新内容显示
+    
+    Args:
+        uri: WebSocket服务器地址
+        content_list: 内容列表
+        window: 窗口对象
+    '''
     async with websockets.connect(uri) as websocket:
         while not stop_event.is_set():
             try:
@@ -48,12 +72,21 @@ async def websocket_handler(uri, content_list, window):
                     timestamp = data.get('timestamp', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
                     with content_lock:
                         content_list.append(f"[{timestamp}] {data['username']}: {data['message']}\n")
-                    # Update the content display whenever a new message is received
+                    # 更新内容显示
                     update_content(window, content_list)
             except websockets.ConnectionClosed:
                 break
 
+
 def input_box(stdscr, content_list, username):
+    '''
+    输入框处理程序，处理用户输入并发送消息
+    
+    Args:
+        stdscr: 主屏幕对象
+        content_list: 内容列表
+        username: 用户名
+    '''
     curses.echo()
     
     # 初始化颜色
@@ -64,22 +97,22 @@ def input_box(stdscr, content_list, username):
     curses.init_pair(4, curses.COLOR_RED, curses.COLOR_BLACK)    # 表头颜色
     curses.init_pair(5, curses.COLOR_CYAN, curses.COLOR_BLACK)   # 边框颜色
 
-    # Setup the window dimensions
+    # 设置窗口尺寸
     height, width = stdscr.getmaxyx()
     chat_width = int(width * 0.6)
     sysinfo_width = width - chat_width
     
-    # Setup the window for content display
+    # 设置内容显示窗口
     content_height = height - 3
     content_window = curses.newwin(content_height, chat_width, 0, 0)
     content_window.scrollok(True)
     draw_borders(content_window, curses.color_pair(5))  # 绘制聊天内容窗口的矩形框
     
-    # Setup the window for input box
+    # 设置输入框窗口
     input_box_window = curses.newwin(3, chat_width, height - 3, 0)
     draw_borders(input_box_window, curses.color_pair(5))
     
-    # Setup the window for system info
+    # 设置系统信息窗口
     sysinfo_window = curses.newwin(height, sysinfo_width, 0, chat_width)
     draw_borders(sysinfo_window, curses.color_pair(5))
     
@@ -87,13 +120,13 @@ def input_box(stdscr, content_list, username):
     input_box_window.addstr(1, 1, prompt, curses.color_pair(1))  # 设置用户名颜色
     input_box_window.refresh()
     
-    # Calculate the starting position for user input
+    # 计算用户输入的起始位置
     start_x = len(prompt) + 1
     
-    # Start thread for updating content display
+    # 启动更新内容显示的线程
     threading.Thread(target=lambda: asyncio.run(websocket_handler("ws://tstwiki.cn:8765", content_list, content_window)), daemon=True).start()
     
-    # Start thread for updating system info display
+    # 启动更新系统信息显示的线程
     threading.Thread(target=update_sysinfo, args=(sysinfo_window,), daemon=True).start()
 
     while True:
@@ -106,33 +139,48 @@ def input_box(stdscr, content_list, username):
         except UnicodeDecodeError:
             continue  # 如果解码失败，跳过当前输入
 
-        # Exit the loop if the user types ':q'
+        # 如果用户输入 ':q'，退出循环
         if input_decoded.lower() == ':q':
             break
 
-        # Send the user input to the WebSocket server
+        # 发送用户输入到 WebSocket 服务器
         asyncio.run(send_message(input_decoded, username))
 
-        # Clear the input box after getting input
+        # 获取输入后清空输入框
         input_box_window.clear()
         draw_borders(input_box_window, curses.color_pair(5))
         input_box_window.addstr(1, 1, prompt, curses.color_pair(1))  # 保持用户名颜色
         input_box_window.move(1, start_x)  # 确保光标在正确的位置
         input_box_window.refresh()
 
-        # Update the content display whenever a new message is sent
+        # 每次发送新消息后更新内容显示
         update_content(content_window, content_list)
 
-    # Stop the content update thread
+    # 停止内容更新线程
     stop_event.set()
 
+
 async def send_message(message, username):
+    '''
+    发送消息到 WebSocket 服务器
+    
+    Args:
+        message: 消息内容
+        username: 用户名
+    '''
     async with websockets.connect("ws://tstwiki.cn:8765") as websocket:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         data = json.dumps({"type": "message", "username": username, "message": message, "timestamp": timestamp})
         await websocket.send(data)
 
+
 def update_sysinfo(window):
+    '''
+    更新系统信息窗口内容
+    
+    Args:
+        window: 窗口对象
+    '''
     while not stop_event.is_set():
         window.erase()
         draw_borders(window, curses.color_pair(5))
@@ -177,13 +225,20 @@ def update_sysinfo(window):
         window.refresh()
         time.sleep(1)
 
+
 def main(stdscr):
+    '''
+    主函数，初始化并启动输入框
+    
+    Args:
+        stdscr: 主屏幕对象
+    '''
     content_list = []
 
-    # Default username
+    # 默认用户名
     username = "Anonymous"
     
-    # Check if a username is passed as an argument
+    # 检查是否传入了用户名参数
     if len(sys.argv) > 1:
         username = sys.argv[1]
 
