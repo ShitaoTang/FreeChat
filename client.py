@@ -38,7 +38,7 @@ def update_content(window, content_list):
     draw_borders(window, curses.color_pair(5))
     window.refresh()
 
-async def websocket_handler(uri, content_list, window):
+async def websocket_handler(uri, content_list):
     async with websockets.connect(uri) as websocket:
         while not stop_event.is_set():
             try:
@@ -48,10 +48,13 @@ async def websocket_handler(uri, content_list, window):
                     timestamp = data.get('timestamp', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
                     with content_lock:
                         content_list.append(f"[{timestamp}] {data['username']}: {data['message']}\n")
-                    # Update the content display whenever a new message is received
-                    update_content(window, content_list)
             except websockets.ConnectionClosed:
                 break
+
+async def update_ui(content_window, content_list):
+    while not stop_event.is_set():
+        update_content(content_window, content_list)
+        await asyncio.sleep(1)  # 定期更新UI
 
 def input_box(stdscr, content_list, username):
     curses.echo()
@@ -90,11 +93,14 @@ def input_box(stdscr, content_list, username):
     # Calculate the starting position for user input
     start_x = len(prompt) + 1
     
-    # Start thread for updating content display
-    threading.Thread(target=lambda: asyncio.run(websocket_handler("ws://localhost:8765", content_list, content_window)), daemon=True).start()
+    # Start thread for WebSocket handler
+    threading.Thread(target=lambda: asyncio.run(websocket_handler("ws://localhost:8765", content_list)), daemon=True).start()
     
     # Start thread for updating system info display
     threading.Thread(target=update_sysinfo, args=(sysinfo_window,), daemon=True).start()
+
+    # Start async task for updating UI
+    threading.Thread(target=lambda: asyncio.run(update_ui(content_window, content_list)), daemon=True).start()
 
     while True:
         # 确保光标在正确的位置并闪烁
@@ -119,9 +125,6 @@ def input_box(stdscr, content_list, username):
         input_box_window.addstr(1, 1, prompt, curses.color_pair(1))  # 保持用户名颜色
         input_box_window.move(1, start_x)  # 确保光标在正确的位置
         input_box_window.refresh()
-
-        # Update the content display whenever a new message is sent
-        update_content(content_window, content_list)
 
     # Stop the content update thread
     stop_event.set()
@@ -148,7 +151,9 @@ def update_sysinfo(window):
         # 获取进程信息
         processes = []
         for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent', 'status', 'create_time']):
-            processes.append(proc.info)
+            info = proc.info
+            if info['cpu_percent'] is not None:  # 确保cpu_percent不是None
+                processes.append(info)
 
         # 根据CPU使用率排序
         processes = sorted(processes, key=lambda p: p['cpu_percent'], reverse=True)
@@ -164,12 +169,21 @@ def update_sysinfo(window):
             mem = f"{proc['memory_percent']:.1f}"
             status = proc['status']
             runtime = datetime.now() - datetime.fromtimestamp(proc['create_time'])
-            runtime_str = str(runtime).split('.')[0]  # 去掉微秒部分
+            
+            # 格式化运行时间
+            days = runtime.days
+            hours, remainder = divmod(runtime.seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            if days > 0:
+                runtime_str = f"{days}d {hours}h"
+            else:
+                runtime_str = f"{hours:02}:{minutes:02}:{seconds:02}"
+
             line = f"{pid:<6} {name:<15} {cpu:>6}  {runtime_str:<8} {mem:>5} {status}"
             window.addstr(8 + i, 1, line[:max_x - 2])
 
         window.refresh()
-        time.sleep(1)
+        time.sleep(1)  # 将更新时间间隔从1秒增加到2秒
 
 def main(stdscr):
     content_list = []
