@@ -1,14 +1,28 @@
-# 使用官方 Python 镜像作为基础镜像
-FROM python:3.11.3-slim
+# 第一阶段：构建阶段
+FROM python:3.11.3-alpine AS builder
+
+# 安装构建依赖
+RUN apk add --no-cache gcc musl-dev linux-headers
 
 # 设置工作目录
-WORKDIR /FreeChat
+WORKDIR /app
 
-# 复制项目的依赖文件
+# 复制并安装依赖
 COPY requirements.txt .
-
-# 安装项目依赖
 RUN pip install --no-cache-dir -r requirements.txt
+
+# 复制项目文件
+COPY . .
+
+# 第二阶段：运行阶段
+FROM python:3.11.3-alpine
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制已安装的依赖
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
 # 复制项目文件
 COPY . .
