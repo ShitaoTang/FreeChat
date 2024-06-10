@@ -23,7 +23,7 @@ FreeChat
 ├── LICENSE
 ├── readme.md
 ├── requirements.txt    # 依赖库
-└── server.py			# 聊天室服务器代码
+└── server.py           # 聊天室服务器代码
 ```
 
 ## usage
