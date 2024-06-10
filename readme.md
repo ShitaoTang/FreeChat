@@ -18,12 +18,12 @@ ssh -t chat@tstwiki.cn [username]
 
 ```
 FreeChat
-	├── client.py			# 聊天室客户端代码
-	├── Dockerfile			# 部署Docker的配置文件
-	├── LICENSE
-	├── readme.md
-	├── requirements.txt	# 依赖库
-	└── server.py			# 聊天室服务器代码
+├── client.py			# 聊天室客户端代码
+├── Dockerfile			# 部署Docker的配置文件
+├── LICENSE
+├── readme.md
+├── requirements.txt	# 依赖库
+└── server.py			# 聊天室服务器代码
 ```
 
 ## usage
